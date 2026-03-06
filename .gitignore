@@ -1,0 +1,15 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+env/
+.venv/
+venv/
+
+# VSCode (часто рядом с env)
+.vscode/
+
+# OS
+.DS_Store
