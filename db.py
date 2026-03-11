@@ -28,6 +28,7 @@ class Database:
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             description TEXT NOT NULL,
             hours_required INTEGER NOT NULL,
+            hours_planned INTEGER,
             status TEXT NOT NULL DEFAULT 'NEW'
         )
         """)
@@ -49,7 +50,9 @@ class Database:
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             employee_id INTEGER NOT NULL,
             task_id INTEGER NOT NULL,
-            hours INTEGER NOT NULL
+            hours INTEGER NOT NULL,
+            FOREIGN KEY(employee_id) REFERENCES employees(id),
+            FOREIGN KEY(task_id) REFERENCES tasks(id)
         )
         """)
 
@@ -141,11 +144,11 @@ class Database:
 
         return cursor.fetchall()
 
-    def get_new_tasks(self):
+    def get_tasks_to_schedule(self):
 
         cursor = self.conn.cursor()
 
-        cursor.execute("SELECT * FROM tasks WHERE status='NEW'")
+        cursor.execute("SELECT * FROM tasks WHERE status<>'COMPLETED'")
 
         return cursor.fetchall()
 
@@ -160,33 +163,42 @@ class Database:
 
         self.conn.commit()
 
-    def update_task_status_bulk(self, task_status: dict):
-        """
-        task_status: {task_id: status}
-        """
+    def update_tasks_bulk(self, task_status: dict):
 
         if not task_status:
             return
 
-        case_statements = []
-        params = []
+        status_cases = []
+        hours_cases = []
+
+        status_params = []
+        hours_params = []
+
         ids = []
 
-        for task_id, status in task_status.items():
+        for task_id, (status, hours) in task_status.items():
 
-            case_statements.append("WHEN id = ? THEN ?")
-            params.extend([task_id, status])
+            status_cases.append("WHEN id = ? THEN ?")
+            status_params.extend([task_id, status])
+
+            hours_cases.append("WHEN id = ? THEN ?")
+            hours_params.extend([task_id, hours])
+
             ids.append(task_id)
 
         sql = f"""
             UPDATE tasks
-            SET status = CASE
-                {' '.join(case_statements)}
-            END
+            SET
+                status = CASE
+                    {' '.join(status_cases)}
+                END,
+                hours_required = CASE
+                    {' '.join(hours_cases)}
+                END
             WHERE id IN ({','.join(['?'] * len(ids))})
         """
 
-        params.extend(ids)
+        params = status_params + hours_params + ids
 
         cursor = self.conn.cursor()
         cursor.execute(sql, params)
@@ -283,25 +295,33 @@ class Database:
         result = cursor.fetchone()
 
         return result[0] if result and result[0] else 0
-    
-    def delete_future_schedule(self, day, hour):
-        cursor = self.conn.cursor()
-        cursor.execute("""
-            DELETE FROM schedule
-            WHERE day > ?
-            OR (day = ? AND hour >= ?)
-        """, (day, day, hour))
-        self.conn.commit()
 
-    def resave_schedule(self, schedule: list):
+    def resave_schedule_from_cache(self, schedule_cache, current_day):
         """
-        Сохраняет список словарей вида {"task_id": ..., "employee_id": ..., "day": ..., "hour": ...}
+        Сохраняет расписание из ScheduleCache
         """
-        if not schedule:
+
+        self.clear_schedule()
+
+        if not schedule_cache or not schedule_cache.schedule:
             return
 
         cursor = self.conn.cursor()
-        records = [(s["task_id"], s["employee_id"], s["day"], s["hour"]) for s in schedule]
+
+        records = []
+
+        for (day, hour), slots in schedule_cache.schedule.items():
+            for r in slots:
+                
+                if schedule_cache.task_dict[r.task_id]["status"] == "COMPLETED" or schedule_cache.task_dict[r.task_id]["remaining_hours"] <= 0 or day < current_day:
+                    continue
+
+                records.append((
+                    r.task_id,
+                    r.employee_id,
+                    r.day,
+                    r.hour
+                ))
 
         cursor.executemany("""
             INSERT INTO schedule(task_id, employee_id, day, hour)
@@ -346,6 +366,26 @@ class Database:
 
         self.conn.commit()
 
+
+    def get_sum_hours_for_task(self):
+        cursor = self.conn.cursor()
+
+        cursor.execute(
+            """
+            SELECT 
+                t.id,
+                t.description,
+                t.hours_planned,
+                SUM(l.hours) AS actual_hours,
+                SUM(l.hours) - t.hours_planned AS deviation
+            FROM tasks t
+            LEFT JOIN task_logs l ON l.task_id = t.id
+            GROUP BY t.id, t.description, t.hours_planned;
+            """
+        )
+
+        return cursor.fetchall()
+
     # -------------------------
     # ОЧИСТКА БД
     # -------------------------
@@ -354,12 +394,14 @@ class Database:
 
         cursor = self.conn.cursor()
 
-        cursor.execute("DELETE FROM schedule")
-        cursor.execute("DELETE FROM employees")
-        cursor.execute("DELETE FROM tasks")
-        cursor.execute("DELETE FROM task_logs")
-        
+        cursor.execute("DROP TABLE IF EXISTS schedule")
+        cursor.execute("DROP TABLE IF EXISTS task_logs")
+        cursor.execute("DROP TABLE IF EXISTS employees")
+        cursor.execute("DROP TABLE IF EXISTS tasks")
+
         self.conn.commit()
+
+        self.create_tables()
 
     # -------------------------
     # ЗАКРЫТИЕ

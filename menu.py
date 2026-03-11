@@ -21,6 +21,7 @@ def main_menu():
         print("3 - Распределить задачи")
         print("4 - Распределить задачи (тест)")
         print("5 - Симулировать выполнение расписания")
+        print("6 - Отчеты")
         print("0 - Выход")
 
         choice = input("Выбор действия: ")
@@ -42,6 +43,9 @@ def main_menu():
         elif choice == "5":
             print(Fore.YELLOW + "Симуляция выполнения задач...\n" + Style.RESET_ALL)
             last_message = simulate_execution()
+
+        elif choice == "6":
+            report_menu()
 
         elif choice == "0":
             print(Fore.YELLOW + "Выход..." + Style.RESET_ALL)
@@ -129,13 +133,11 @@ def db_menu():
 
         elif choice == "3":
             print(Fore.YELLOW + "Удаление задачи..." + Style.RESET_ALL)
-            delete_task()
-            last_message = Fore.GREEN + "Задача удалена" + Style.RESET_ALL
+            last_message = Fore.GREEN + "Задача удалена\n" + delete_task() + Style.RESET_ALL
 
         elif choice == "4":
             print(Fore.YELLOW + "Удаление сотрудника..." + Style.RESET_ALL)
-            delete_employee()
-            last_message = Fore.GREEN + "Сотрудник удален" + Style.RESET_ALL
+            last_message = Fore.GREEN + "Сотрудник удален\n" + delete_employee() + Style.RESET_ALL
 
         elif choice == "5":
             print(Fore.YELLOW + "Просмотр сотрудников..." + Style.RESET_ALL)
@@ -153,6 +155,33 @@ def db_menu():
             print(Fore.YELLOW + "Очистка БД..." + Style.RESET_ALL)
             last_message = Fore.GREEN + "База данных очищена" + Style.RESET_ALL
             clear_db()
+
+        elif choice == "0":
+            break
+
+        else:
+            print("Неверный ввод")
+
+        if choice != "0" and last_message != "":
+            print(last_message)
+            input("\nНажмите Enter для продолжения...")
+            last_message = ""
+
+
+def report_menu():
+    global last_message
+    while True:
+        clear_console()
+
+        print("\n--- ОТЧЕТЫ ---")
+        print("1 - Журнал задач")
+        print("0 - Назад")
+
+        choice = input("Выбор: ")
+
+        if choice == "1":
+            print(Fore.YELLOW + "Журнал задач...\n" + Style.RESET_ALL)
+            last_message = get_task_journal()
 
         elif choice == "0":
             break

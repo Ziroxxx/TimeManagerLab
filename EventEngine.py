@@ -1,10 +1,13 @@
 import random
 
 class EventEngine:
-    def __init__(self):
+    def __init__(self, db):
         self.delay_probability = 0.10
         self.fast_probability = 0.05
         self.sick_probability = 0.02
+
+        self.start_day = 1
+        self.db = db
 
     def employee_event(self):
         if random.random() < self.sick_probability:
@@ -21,3 +24,6 @@ class EventEngine:
             return ("TASK_FAST", random.randint(1,2))
 
         return None
+
+    def cLear_schedule_past_days(self):
+        self.db.clear_past_schedule(self.start_day, 0)

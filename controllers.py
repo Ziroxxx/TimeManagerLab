@@ -10,11 +10,17 @@ from TaskJournal import TaskJournal
 init(autoreset=True)
 db = Database("schedule.db")
 generator = DataGenerator(db)
+event_engine = EventEngine(db)
+journal = TaskJournal()
+simulator = ExecuteSimulator(
+    db,
+    event_engine,
+    journal
+)
 
 def distribute_tasks():
-    manager = ScheduleManager(db)
+    manager = ScheduleManager(db, event_engine=event_engine)
     return manager.get_printed_schedule()
-
 
 def distribute_tasks_test():
     try:
@@ -30,7 +36,7 @@ def distribute_tasks_test():
         tester = PerformanceTester(
             db,
             DataGenerator(db),
-            ScheduleManager
+            ScheduleManager(db, event_engine=event_engine)
         )
 
         avg_time = tester.run_test(
@@ -55,16 +61,6 @@ def simulate_execution():
         if days <= 0:
             print("Число дней должно быть больше 0")
             return
-
-        event_engine = EventEngine()
-
-        journal = TaskJournal()
-
-        simulator = ExecuteSimulator(
-            db,
-            event_engine,
-            journal
-        )
 
         result = simulator.simulate(days)
 
@@ -119,10 +115,15 @@ def add_employee():
 def delete_task():
     task_id = int(input(Fore.CYAN + "ID Задачи: " + Style.RESET_ALL))
     db.delete_task(task_id)
+    schedule_manager = ScheduleManager(db, event_engine=event_engine)
+    return schedule_manager.rebuild_schedule()
+    
 
 def delete_employee():
     employee_id = int(input(Fore.CYAN + "ID Сотрудника: " + Style.RESET_ALL))
     db.delete_employee(employee_id)
+    schedule_manager = ScheduleManager(db, event_engine=event_engine)
+    return schedule_manager.rebuild_schedule()
 
 def get_employees():
     employees = db.get_employees() or []
@@ -137,19 +138,19 @@ def get_tasks():
         return Fore.RED + "Задач нет." + Style.RESET_ALL
     lines = [Fore.GREEN + "Список задач:\n" + Style.RESET_ALL]
     for task in tasks:
-        if task[3] == "NEW":
+        if task[4] == "NEW":
             status_color = Fore.CYAN
             status_text = "НОВАЯ"
         
-        elif task[3] == "SCHEDULED":
+        elif task[4] == "SCHEDULED":
             status_color = Fore.YELLOW
             status_text = "ЗАПЛАНИРОВАНА"
 
-        elif task[3] == "IN_PROGRESS":
+        elif task[4] == "IN_PROGRESS":
             status_color = Fore.YELLOW
             status_text = "В РАБОТЕ"
 
-        elif task[3] == "COMPLETED":
+        elif task[4] == "COMPLETED":
             status_color = Fore.GREEN
             status_text = "ВЫПОЛНЕНА"
 
@@ -165,3 +166,11 @@ def get_schedule():
     else:
         message = Fore.RED + "Расписание пустое" + Style.RESET_ALL
     return message
+
+def get_task_journal():
+    report = journal.get_completed_tasks_report(db)
+
+    if not report:
+        return Fore.RED + "Журнал пустой" + Style.RESET_ALL
+
+    return "\n".join(report)

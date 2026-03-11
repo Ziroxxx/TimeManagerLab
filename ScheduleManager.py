@@ -3,16 +3,27 @@ from collections import defaultdict
 from colorama import init, Fore, Style
 
 class ScheduleManager:
-    def __init__(self, db):
+    def __init__(self, db, event_engine=None):
         self.db = db
-        self.tasks = self.db.get_new_tasks()
+        self.event_engine = event_engine
+        self.tasks = self.db.get_tasks_to_schedule()
         self.employees = self.db.get_employees()
+
+    def rebuild_schedule(self):
+        self.db.clear_schedule()
+        try:
+            return Fore.GREEN + "Расписание перестроено.\n" + Style.RESET_ALL + self.get_printed_schedule()
+        except Exception as e:
+            return Fore.RED + "Расписание пустое.\n" + Style.RESET_ALL
 
     def get_printed_schedule(self):
         self.schedule_tasks()
         return self.get_schedule_string()
 
     def schedule_tasks(self):
+        if not self.tasks or not self.employees:
+            return
+
         self.tasks.sort(key=lambda x: x[2], reverse=True)
 
         workers = self.build_workers_heap()
@@ -21,7 +32,7 @@ class ScheduleManager:
 
         max_day_capacity = max(e[2] for e in self.employees)
 
-        for task_id, description, task_hours, status in self.tasks:
+        for task_id, description, task_hours, status, planned_hours in self.tasks:
 
             if task_hours > 2 * max_day_capacity:
                 self.schedule_parallel(task_id, task_hours, workers, schedule)
@@ -49,7 +60,7 @@ class ScheduleManager:
                 workers.append((day-1, hour, emp_id, hours_per_day))
 
             else:
-                workers.append((0, 0, emp_id, hours_per_day))
+                workers.append((self.event_engine.start_day-1, 0, emp_id, hours_per_day))
 
         heapq.heapify(workers)
 

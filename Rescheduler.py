@@ -58,7 +58,7 @@ class Rescheduler:
             if t["remaining_hours"] > 0:
                 tasks.append({
                     "task_id": task_id,
-                    "task_name": t.get("task_name", f"Task #{task_id}"),
+                    "task_name": t["task_name"],
                     "remaining_hours": t["remaining_hours"],
                     "planned_hours": t["planned_hours"],
                     "status": t.get("status", "SCHEDULED")
@@ -234,11 +234,3 @@ class Rescheduler:
 
         new_cache = ScheduleCache(rows)
         return new_cache
-
-    # -------------------------
-    # Сохранение перепланированного расписания в БД
-    # -------------------------
-    def save_schedule_to_db(self):
-        self.db.delete_future_schedule(self.sim_day, self.sim_hour)
-        self.db.resave_schedule(self.new_slots)
-        self.new_slots = []

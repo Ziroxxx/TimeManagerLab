@@ -13,6 +13,7 @@ class ScheduleCache:
 
             if task_id not in self.task_dict:
                 self.task_dict[task_id] = {
+                    "task_name": row[5],
                     "remaining_hours": row[6],
                     "planned_hours": row[6],
                     "status": row[7]
@@ -71,5 +72,3 @@ class ScheduleRecord:
 
         self.task_id = task_id
         self.task_name = task_name
-
-        self.processed = False

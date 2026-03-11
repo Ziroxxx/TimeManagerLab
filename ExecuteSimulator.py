@@ -1,6 +1,7 @@
 from ScheduleDTO import *
 from colorama import Fore, Style
 from Rescheduler import Rescheduler
+from SchedulePrinter import SchedulePrinter
 
 class ExecuteSimulator:
 
@@ -14,8 +15,6 @@ class ExecuteSimulator:
         self.rescheduler = None 
 
     def simulate(self, days):
-
-        self.db.clear_logs()
         rows = self.db.get_detailed_schedule()
 
         if not rows:
@@ -23,9 +22,9 @@ class ExecuteSimulator:
             return "\n".join(self.result)
 
         schedule = ScheduleCache(rows)
-        self.rescheduler = Rescheduler(self.db, schedule, sim_day=1, sim_hour=0, sick_today=set())
+        self.rescheduler = Rescheduler(self.db, schedule, sim_day=self.event_engine.start_day, sim_hour=0, sick_today=set())
 
-        for day in range(1, days + 1):
+        for day in range(self.event_engine.start_day, self.event_engine.start_day + days):
 
             self.result.append(Fore.CYAN + f"\n===== День {day} =====" + Style.RESET_ALL)
 
@@ -89,32 +88,35 @@ class ExecuteSimulator:
                             self.result.append(Fore.YELLOW + f"{slot.task_name} оказалась проще (-{value}ч)" + Style.RESET_ALL)
 
                     # выполняем час работы
-                    self.journal.log_work(slot.employee_id, slot.task_id, 1)
-                    task = schedule.task_dict[slot.task_id]
                     task["remaining_hours"] -= 1
-
-                    if task["status"] == "SCHEDULED":
-                        task["status"] = "IN_PROGRESS"
-                        self.journal.update_task_status(slot.task_id, "IN_PROGRESS")
-
-                    if task["remaining_hours"] <= 0:
-                        task["remaining_hours"] = 0
-                        task["status"] = "COMPLETED"
-                        self.journal.update_task_status(slot.task_id, "COMPLETED")
 
                     self.result.append(
                         f"{slot.employee_name} работает над '{slot.task_name}' "
                         f"(осталось {task["remaining_hours"]})"
                     )
 
+                    if task["status"] == "SCHEDULED":
+                        task["status"] = "IN_PROGRESS"
+                        self.journal.update_task_status(slot.task_id, "IN_PROGRESS", task["remaining_hours"])
+
+                    if task["remaining_hours"] <= 0:
+                        task["remaining_hours"] = 0
+                        task["status"] = "COMPLETED"
+                        self.journal.update_task_status(slot.task_id, "COMPLETED", 0)
+                        self.result.append(Fore.GREEN + f"{slot.task_name} выполнена!" + Style.RESET_ALL)
+
+                    self.journal.update_task_status(slot.task_id, task["status"], task["remaining_hours"])
+                    self.journal.log_work(slot.employee_id, slot.task_id, 1)
+                    
                 if rebuild_needed:
                     self.rescheduler.sim_day = day
                     self.rescheduler.sim_hour = hour+1
                     self.rescheduler.sick_today = sick_today
 
                     schedule = self.rescheduler.rebuild_schedule()
+                    print(SchedulePrinter.get_cache_schedule_string(schedule))
                     hours = schedule.get_hours_for_day(day)
-                    print(hours)
+                    hour_index = -1 # после инкремента будет 0, т.е. начнем с начала списка часов
                     self.rescheduler.old_schedule = schedule
 
                     self.result.append(
@@ -123,13 +125,11 @@ class ExecuteSimulator:
                 
                 hour_index += 1
 
-        self.result.append(Fore.GREEN + "\nСимуляция завершена\n" + Style.RESET_ALL)
+        self.event_engine.start_day += days
 
         self.journal.save_to_db(self.db)
+        self.db.resave_schedule_from_cache(schedule, self.event_engine.start_day)
 
-        self.result.append(Fore.GREEN + "Логи выполнения сохранены" + Style.RESET_ALL)
+        self.result.append(Fore.GREEN + "\nСимуляция завершена\nЛоги выполнения сохранены" + Style.RESET_ALL)
 
-        if self.rescheduler:
-            self.rescheduler.save_schedule_to_db()
-            self.result.append(Fore.GREEN + "Перепланированное расписание сохранено в БД" + Style.RESET_ALL)
         return "\n".join(self.result)
