@@ -1,4 +1,5 @@
 from controllers import *
+import os
 import platform
 
 last_message = ""
@@ -19,6 +20,7 @@ def main_menu():
         print("2 - Работа с БД")
         print("3 - Распределить задачи")
         print("4 - Распределить задачи (тест)")
+        print("5 - Симулировать выполнение расписания")
         print("0 - Выход")
 
         choice = input("Выбор действия: ")
@@ -36,6 +38,10 @@ def main_menu():
         elif choice == "4":
             print(Fore.YELLOW + "Распределение задач...(тестирование)\n" + Style.RESET_ALL)
             last_message = distribute_tasks_test()
+
+        elif choice == "5":
+            print(Fore.YELLOW + "Симуляция выполнения задач...\n" + Style.RESET_ALL)
+            last_message = simulate_execution()
 
         elif choice == "0":
             print(Fore.YELLOW + "Выход..." + Style.RESET_ALL)

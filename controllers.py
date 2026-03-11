@@ -2,8 +2,10 @@ from ScheduleManager import ScheduleManager
 from db import Database
 from DataGenerator import DataGenerator
 from colorama import init, Fore, Style
-import time, csv, os
 from PerformanceTester import PerformanceTester
+from EventEngine import EventEngine
+from ExecuteSimulator import ExecuteSimulator
+from TaskJournal import TaskJournal
 
 init(autoreset=True)
 db = Database("schedule.db")
@@ -45,6 +47,35 @@ def distribute_tasks_test():
     except Exception as e:
         return f"Ошибка: {e}"
     
+def simulate_execution():
+    try:
+
+        days = int(input("Сколько дней симулировать? "))
+
+        if days <= 0:
+            print("Число дней должно быть больше 0")
+            return
+
+        event_engine = EventEngine()
+
+        journal = TaskJournal()
+
+        simulator = ExecuteSimulator(
+            db,
+            event_engine,
+            journal
+        )
+
+        result = simulator.simulate(days)
+
+        return result + "\nСимуляция успешно завершена"
+
+    except ValueError:
+        return "Ошибка: введите корректное число дней"
+
+    # except Exception as e:
+    #     return f"Ошибка симуляции: {e}"
+
 def generate_tasks():
     count = int(input(Fore.CYAN + "Количество задач: " + Style.RESET_ALL))
     min_hours = int(input(Fore.CYAN + "Минимальная трудоемкость (чч): " + Style.RESET_ALL))
@@ -106,8 +137,22 @@ def get_tasks():
         return Fore.RED + "Задач нет." + Style.RESET_ALL
     lines = [Fore.GREEN + "Список задач:\n" + Style.RESET_ALL]
     for task in tasks:
-        status_color = Fore.YELLOW if task[3] == "SCHEDULED" else Fore.GREEN
-        status_text = "ЗАПЛАНИРОВАНА" if task[3] == "SCHEDULED" else "НОВАЯ"
+        if task[3] == "NEW":
+            status_color = Fore.CYAN
+            status_text = "НОВАЯ"
+        
+        elif task[3] == "SCHEDULED":
+            status_color = Fore.YELLOW
+            status_text = "ЗАПЛАНИРОВАНА"
+
+        elif task[3] == "IN_PROGRESS":
+            status_color = Fore.YELLOW
+            status_text = "В РАБОТЕ"
+
+        elif task[3] == "COMPLETED":
+            status_color = Fore.GREEN
+            status_text = "ВЫПОЛНЕНА"
+
         lines.append(f"ID: {task[0]}, Описание: {task[1]}, Трудоемкость: {task[2]}, Статус: {status_color}{status_text}{Style.RESET_ALL}")
     return "\n".join(lines)
 

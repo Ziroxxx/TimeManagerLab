@@ -28,8 +28,6 @@ class ScheduleManager:
             else:
                 self.schedule_single_employee(task_id, task_hours, workers, schedule)
 
-            
-
         self.db.save_schedule(schedule)
 
     def build_workers_heap(self):

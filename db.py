@@ -44,6 +44,15 @@ class Database:
         )
         """)
 
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS task_logs(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            employee_id INTEGER NOT NULL,
+            task_id INTEGER NOT NULL,
+            hours INTEGER NOT NULL
+        )
+        """)
+
         self.conn.commit()
 
     # -------------------------
@@ -151,7 +160,39 @@ class Database:
 
         self.conn.commit()
 
-     # ------------------------------------------------
+    def update_task_status_bulk(self, task_status: dict):
+        """
+        task_status: {task_id: status}
+        """
+
+        if not task_status:
+            return
+
+        case_statements = []
+        params = []
+        ids = []
+
+        for task_id, status in task_status.items():
+
+            case_statements.append("WHEN id = ? THEN ?")
+            params.extend([task_id, status])
+            ids.append(task_id)
+
+        sql = f"""
+            UPDATE tasks
+            SET status = CASE
+                {' '.join(case_statements)}
+            END
+            WHERE id IN ({','.join(['?'] * len(ids))})
+        """
+
+        params.extend(ids)
+
+        cursor = self.conn.cursor()
+        cursor.execute(sql, params)
+        self.conn.commit()
+
+    # ------------------------------------------------
     # РАСПИСАНИЕ
     # ------------------------------------------------
 
@@ -182,6 +223,28 @@ class Database:
         """)
 
         return cursor.fetchall()
+    
+    def get_detailed_schedule(self):
+
+        cursor = self.conn.cursor()
+
+        cursor.execute("""
+        SELECT
+        s.day,
+        s.hour,
+        e.id,
+        e.name,
+        t.id,
+        t.description,
+        t.hours_required,
+        t.status
+        FROM schedule s
+        JOIN employees e ON s.employee_id = e.id
+        JOIN tasks t ON s.task_id = t.id
+        ORDER BY s.day, s.hour
+        """)
+
+        return cursor.fetchall()
 
     def save_schedule(self, schedule):
 
@@ -202,6 +265,7 @@ class Database:
 
             for task_id in scheduled_tasks:
                 self.mark_task_scheduled(task_id)
+                
     def clear_schedule(self):
 
         cursor = self.conn.cursor()
@@ -219,6 +283,68 @@ class Database:
         result = cursor.fetchone()
 
         return result[0] if result and result[0] else 0
+    
+    def delete_future_schedule(self, day, hour):
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            DELETE FROM schedule
+            WHERE day > ?
+            OR (day = ? AND hour >= ?)
+        """, (day, day, hour))
+        self.conn.commit()
+
+    def resave_schedule(self, schedule: list):
+        """
+        Сохраняет список словарей вида {"task_id": ..., "employee_id": ..., "day": ..., "hour": ...}
+        """
+        if not schedule:
+            return
+
+        cursor = self.conn.cursor()
+        records = [(s["task_id"], s["employee_id"], s["day"], s["hour"]) for s in schedule]
+
+        cursor.executemany("""
+            INSERT INTO schedule(task_id, employee_id, day, hour)
+            VALUES (?, ?, ?, ?)
+        """, records)
+
+        self.conn.commit()
+    
+    # -------------------------
+    # ЛОГИ ВЫПОЛНЕНИЯ
+    # -------------------------
+    def save_log(self, logs):
+        """
+        logs: defaultdict(list) -> employee_id : [(task_id, hours), ...]
+        """
+        rows = []
+        for emp_id, entries in logs.items():
+            for task_id, hours in entries:
+                rows.append((emp_id, task_id, hours))
+
+        if not rows:
+            return
+
+        cursor = self.conn.cursor()
+        cursor.executemany(
+            """
+            INSERT INTO task_logs(employee_id, task_id, hours)
+            VALUES (?, ?, ?)
+            """,
+            rows
+        )
+        self.conn.commit()
+
+    def clear_logs(self):
+        cursor = self.conn.cursor()
+
+        cursor.execute(
+            """
+            DELETE FROM task_logs
+            """
+        )
+
+        self.conn.commit()
 
     # -------------------------
     # ОЧИСТКА БД
@@ -231,6 +357,7 @@ class Database:
         cursor.execute("DELETE FROM schedule")
         cursor.execute("DELETE FROM employees")
         cursor.execute("DELETE FROM tasks")
+        cursor.execute("DELETE FROM task_logs")
         
         self.conn.commit()
 
