@@ -1,6 +1,6 @@
 import heapq
 from collections import defaultdict
-from ScheduleDTO import ScheduleCache, ScheduleRecord
+from Data.ScheduleDTO import ScheduleCache, ScheduleRecord
 
 class Rescheduler:
     """
@@ -78,6 +78,7 @@ class Rescheduler:
         for emp_id, name, hours_per_day in self.employees:
 
             if emp_id in self.sick_today:
+                workers.append((self.sim_day+1, 0, emp_id, hours_per_day, 0))
                 continue
 
             if emp_id in last_slots:
@@ -158,6 +159,7 @@ class Rescheduler:
 
             self.new_slots.append({
                 "task_id": task["task_id"],
+                "task_name": task["task_name"],
                 "employee_id": emp_id,
                 "day": day,
                 "hour": hour
@@ -187,6 +189,7 @@ class Rescheduler:
 
             self.new_slots.append({
                 "task_id": task["task_id"],
+                "task_name": task["task_name"],
                 "employee_id": emp_id,
                 "day": day,
                 "hour": hour

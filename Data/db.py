@@ -56,11 +56,34 @@ class Database:
         )
         """)
 
+        cursor.execute("""
+        CREATE TRIGGER IF NOT EXISTS set_hours_planned
+        AFTER INSERT ON tasks
+        FOR EACH ROW
+        WHEN NEW.hours_planned IS NULL
+        BEGIN
+                UPDATE tasks
+                SET hours_planned = NEW.hours_required
+                WHERE id = NEW.id;
+        END;
+        """)
+
         self.conn.commit()
 
     # -------------------------
     # СОТРУДНИКИ
     # -------------------------
+
+    def get_employee_by_name(self, dev_name):
+
+        cursor = self.conn.cursor()
+
+        cursor.execute(
+            "SELECT * FROM employees WHERE name = ?",
+            (dev_name,)
+        )
+
+        return cursor.fetchone()
 
     def add_employee(self, name, hours_per_day):
 
@@ -159,6 +182,17 @@ class Database:
         cursor.execute(
             "UPDATE tasks SET status='SCHEDULED' WHERE id=?",
             (task_id,)
+        )
+
+        self.conn.commit()
+
+    def update_task_remaining_hours_by_id(self, task_id, hours):
+
+        cursor = self.conn.cursor()
+
+        cursor.execute(
+            "UPDATE tasks SET hours_required = hours_required + ? WHERE id = ?",
+            (hours, task_id)
         )
 
         self.conn.commit()
@@ -295,6 +329,29 @@ class Database:
         result = cursor.fetchone()
 
         return result[0] if result and result[0] else 0
+    
+    def get_schedule_for_employee(self, employee_id):
+
+        cursor = self.conn.cursor()
+
+        cursor.execute("""
+            SELECT
+                s.day,
+                s.hour,
+                e.id,
+                e.name,
+                t.id,
+                t.description,
+                t.hours_required,
+                t.status
+                FROM schedule s
+                JOIN employees e ON s.employee_id = e.id
+                JOIN tasks t ON s.task_id = t.id
+                WHERE e.id = ?
+                ORDER BY s.day, s.hour
+        """, (employee_id,))
+
+        return cursor.fetchall()
 
     def resave_schedule_from_cache(self, schedule_cache, current_day):
         """

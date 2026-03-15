@@ -1,19 +1,20 @@
-from ScheduleDTO import *
+from Data.ScheduleDTO import *
 from colorama import Fore, Style
-from Rescheduler import Rescheduler
-from SchedulePrinter import SchedulePrinter
+from ScheduleUtils.Rescheduler import Rescheduler
+from ScheduleUtils.SchedulePrinter import SchedulePrinter
 
 class ExecuteSimulator:
 
-    def __init__(self, db, event_engine, journal):
+    def __init__(self, db, event_engine, journal, sick_today=set()):
 
         self.db = db
         self.event_engine = event_engine
         self.journal = journal
+        self.sick_today = sick_today
 
         self.result = []
-        self.rescheduler = None 
-
+        self.rescheduler = None
+        
     def simulate(self, days):
         rows = self.db.get_detailed_schedule()
 
@@ -28,7 +29,7 @@ class ExecuteSimulator:
 
             self.result.append(Fore.CYAN + f"\n===== День {day} =====" + Style.RESET_ALL)
 
-            sick_today = set()
+            sick_today = self.sick_today.copy() if day == self.event_engine.start_day else set()
 
             employees = schedule.get_employees_for_day(day)
 

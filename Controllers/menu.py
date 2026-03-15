@@ -1,4 +1,4 @@
-from controllers import *
+from Controllers.controllers import *
 import os
 import platform
 
@@ -10,6 +10,39 @@ def clear_console():
     else:
         os.system("clear")
 
+
+def auth_menu():
+    global last_message
+    while True:
+        clear_console()
+        print("\n--- КТО ТЫ? ---")
+        print("1 - Менеджер проекта")
+        print("2 - Разработчик")
+        print("0 - Выход")
+
+        choice = input("Выбор: ")
+
+        if choice == "1":
+            main_menu()
+
+        elif choice == "2":
+            print(Fore.YELLOW + "Авторизация...\n" + Style.RESET_ALL)
+            last_message, dev_name, dev_id = auth_developer()
+            if dev_name:
+                developer_menu(dev_name, dev_id)
+
+        elif choice == "0":
+            print(Fore.YELLOW + "Выход..." + Style.RESET_ALL)
+            break
+
+        else:
+            print("Неверный ввод")
+
+        if choice != "0" and last_message != "":
+            print(f"\n{last_message}\n")
+            input("\nНажмите Enter для продолжения...")
+            last_message = ""
+
 def main_menu():
     global last_message
     while True:
@@ -19,9 +52,8 @@ def main_menu():
         print("1 - Генерация данных")
         print("2 - Работа с БД")
         print("3 - Распределить задачи")
-        print("4 - Распределить задачи (тест)")
-        print("5 - Симулировать выполнение расписания")
-        print("6 - Отчеты")
+        print("4 - Симулировать выполнение расписания")
+        print("5 - Отчеты")
         print("0 - Выход")
 
         choice = input("Выбор действия: ")
@@ -37,14 +69,10 @@ def main_menu():
             last_message = distribute_tasks()
 
         elif choice == "4":
-            print(Fore.YELLOW + "Распределение задач...(тестирование)\n" + Style.RESET_ALL)
-            last_message = distribute_tasks_test()
-
-        elif choice == "5":
             print(Fore.YELLOW + "Симуляция выполнения задач...\n" + Style.RESET_ALL)
             last_message = simulate_execution()
 
-        elif choice == "6":
+        elif choice == "5":
             report_menu()
 
         elif choice == "0":
@@ -194,3 +222,38 @@ def report_menu():
             input("\nНажмите Enter для продолжения...")
             last_message = ""
 
+
+def developer_menu(dev_name, dev_id):
+    global last_message
+    while True:
+        clear_console()
+
+        print(f"\n--- МЕНЮ РАЗРАБОТЧИКА ({dev_name}) ---")
+        print("1 - Просмотреть расписание")
+        print("2 - Отклонение от расписания")
+        print("3 - Я заболел(а)")
+        print("0 - Назад")
+
+        choice = input("Выбор: ")
+
+        if choice == "1":
+            print(Fore.YELLOW + "Просмотр расписания...\n" + Style.RESET_ALL)
+            last_message = get_schedule_for_employee(dev_id)
+
+        elif choice == "2":
+            print(Fore.YELLOW + "Отклонение от расписания...\n" + Style.RESET_ALL)
+            last_message = report_deviation(dev_id)
+
+        elif choice == "3":
+            print(Fore.YELLOW + "Перестройка расписания...\n" + Style.RESET_ALL)
+            last_message =  reschedule_sick(dev_id)
+        elif choice == "0":
+            break
+
+        else:
+            print("Неверный ввод")
+
+        if choice != "0" and last_message != "":
+            print(last_message)
+            input("\nНажмите Enter для продолжения...")
+            last_message = ""

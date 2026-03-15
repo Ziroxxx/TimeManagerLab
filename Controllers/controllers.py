@@ -1,57 +1,32 @@
-from ScheduleManager import ScheduleManager
-from db import Database
-from DataGenerator import DataGenerator
+from ScheduleUtils.Rescheduler import Rescheduler
+from Data.ScheduleDTO import ScheduleCache
+from ScheduleUtils.ScheduleManager import ScheduleManager
+from ScheduleUtils.SchedulePrinter import SchedulePrinter
+from Data.db import Database
+from Data.DataGenerator import DataGenerator
 from colorama import init, Fore, Style
-from PerformanceTester import PerformanceTester
-from EventEngine import EventEngine
-from ExecuteSimulator import ExecuteSimulator
-from TaskJournal import TaskJournal
+from SimulationUtils.EventEngine import EventEngine
+from SimulationUtils.ExecuteSimulator import ExecuteSimulator
+from SimulationUtils.TaskJournal import TaskJournal
 
 init(autoreset=True)
-db = Database("schedule.db")
+db = Database("Data/schedule.db")
 generator = DataGenerator(db)
 event_engine = EventEngine(db)
+sick_today = set()
 journal = TaskJournal()
-simulator = ExecuteSimulator(
-    db,
-    event_engine,
-    journal
-)
+
+def auth_developer():
+    dev_name = input("Имя пользователя: ")
+    id, name, _ = db.get_employee_by_name(dev_name) or (None, None, None)
+    if id is not None:
+        return ("", name, id)
+    else:
+        return (Fore.RED + "Сотрудник не найден" + Style.RESET_ALL, "", "")
 
 def distribute_tasks():
     manager = ScheduleManager(db, event_engine=event_engine)
     return manager.get_printed_schedule()
-
-def distribute_tasks_test():
-    try:
-
-        num_runs = int(input(Fore.CYAN + "Сколько прогонов теста выполнить? " + Style.RESET_ALL)) 
-        num_tasks = int(input(Fore.CYAN + "Сколько задач генерировать? " + Style.RESET_ALL)) 
-        task_hours_min = int(input(Fore.CYAN + "Минимальная трудоемкость задачи (чч): " + Style.RESET_ALL)) 
-        task_hours_max = int(input(Fore.CYAN + "Максимальная трудоемкость задачи (чч): " + Style.RESET_ALL)) 
-        num_employees = int(input(Fore.CYAN + "Сколько сотрудников? " + Style.RESET_ALL)) 
-        emp_hours_min = int(input(Fore.CYAN + "Минимальное число часов в день для сотрудника: " + Style.RESET_ALL)) 
-        emp_hours_max = int(input(Fore.CYAN + "Максимальное число часов в день для сотрудника: " + Style.RESET_ALL))
-
-        tester = PerformanceTester(
-            db,
-            DataGenerator(db),
-            ScheduleManager(db, event_engine=event_engine)
-        )
-
-        avg_time = tester.run_test(
-            num_runs,
-            num_tasks,
-            task_hours_min,
-            task_hours_max,
-            num_employees,
-            emp_hours_min,
-            emp_hours_max
-        )
-
-        return f"{Fore.GREEN}Тестирование завершено: {num_runs} прогонов, среднее время {avg_time:.4f} сек. Результаты сохранены в performance_results.csv{Style.RESET_ALL}"
-    except Exception as e:
-        return f"Ошибка: {e}"
     
 def simulate_execution():
     try:
@@ -61,6 +36,13 @@ def simulate_execution():
         if days <= 0:
             print("Число дней должно быть больше 0")
             return
+        
+        simulator = ExecuteSimulator(
+            db,
+            event_engine,
+            journal,    
+            sick_today
+        )
 
         result = simulator.simulate(days)
 
@@ -174,3 +156,47 @@ def get_task_journal():
         return Fore.RED + "Журнал пустой" + Style.RESET_ALL
 
     return "\n".join(report)
+
+def get_schedule_for_employee(dev_id, db: Database = db):
+    schedule = db.get_schedule_for_employee(dev_id) or []
+
+    if not schedule:
+        return Fore.RED + f"Нет расписания для сотрудника" + Style.RESET_ALL
+    
+    schedule_cache = ScheduleCache(schedule)
+
+    return SchedulePrinter.get_cache_schedule_string(schedule_cache)
+
+def reschedule_sick(dev_id, db: Database = db):
+    sick_today.add(dev_id)
+
+    rescheduler = Rescheduler(db, 
+                              ScheduleCache(db.get_detailed_schedule()), 
+                              sim_day=event_engine.start_day, 
+                              sim_hour=0, 
+                              sick_today=sick_today)
+    
+    new_schedule = rescheduler.rebuild_schedule()
+    db.resave_schedule_from_cache(new_schedule, event_engine.start_day)
+    schedule_for_employee = get_schedule_for_employee(dev_id, db)
+
+    return Fore.GREEN + "Перестроенное расписание:\n" + Style.RESET_ALL + schedule_for_employee
+
+def report_deviation(dev_id, db: Database = db, task_id=None, deviation_hours=None):
+    if task_id is None:
+        task_id = int(input(Fore.CYAN + "ID задачи: " + Style.RESET_ALL))
+    if deviation_hours is None:
+        deviation_hours = int(input(Fore.CYAN + "Отклонение в часах (может быть отрицательным): " + Style.RESET_ALL))
+
+    db.update_task_remaining_hours_by_id(task_id, deviation_hours)
+    rescheduler = Rescheduler(db, 
+                              ScheduleCache(db.get_detailed_schedule()), 
+                              sim_day=event_engine.start_day, 
+                              sim_hour=0, 
+                              sick_today=sick_today)
+    
+    new_schedule = rescheduler.rebuild_schedule()
+    db.resave_schedule_from_cache(new_schedule, event_engine.start_day)
+    schedule_for_employee = get_schedule_for_employee(dev_id, db)
+
+    return Fore.GREEN + "Перестроенное расписание:\n" + Style.RESET_ALL + schedule_for_employee
